@@ -100,18 +100,86 @@ public class WhiskyWineInstaller {
     }
 
     public static func whiskyWineVersion() -> SemanticVersion? {
-        do {
-            let versionPlist = libraryFolder
-                .appending(path: "WhiskyWineVersion")
-                .appendingPathExtension("plist")
+        let versionPlist = libraryFolder
+            .appending(path: "WhiskyWineVersion")
+            .appendingPathExtension("plist")
 
+        if let version = readWhiskyWineVersionPlist(at: versionPlist) {
+            return version
+        }
+
+        guard let inferredVersion = inferInstalledWineVersion() else {
+            return nil
+        }
+
+        writeWhiskyWineVersionPlist(version: inferredVersion, to: versionPlist)
+        return inferredVersion
+    }
+
+    private static func readWhiskyWineVersionPlist(at url: URL) -> SemanticVersion? {
+        do {
             let decoder = PropertyListDecoder()
-            let data = try Data(contentsOf: versionPlist)
+            let data = try Data(contentsOf: url)
             let info = try decoder.decode(WhiskyWineVersion.self, from: data)
             return info.version
         } catch {
-            print(error)
             return nil
+        }
+    }
+
+    private static func inferInstalledWineVersion() -> SemanticVersion? {
+        let wine64 = binFolder.appending(path: "wine64")
+        guard FileManager.default.fileExists(atPath: wine64.path(percentEncoded: false)) else {
+            return nil
+        }
+
+        let process = Process()
+        process.executableURL = wine64
+        process.arguments = ["--version"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else {
+                return nil
+            }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let output = String(data: data, encoding: .utf8) else {
+                return nil
+            }
+
+            let components = output
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(whereSeparator: { !$0.isNumber && $0 != "." })
+
+            for component in components {
+                if let version = SemanticVersion(String(component)) {
+                    return version
+                }
+            }
+        } catch {
+            return nil
+        }
+
+        return nil
+    }
+
+    private static func writeWhiskyWineVersionPlist(version: SemanticVersion, to url: URL) {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .xml
+
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            let data = try encoder.encode(WhiskyWineVersion(version: version))
+            try data.write(to: url)
+        } catch {
+            // Ignore write failures; caller still has inferred version in memory.
         }
     }
 }
