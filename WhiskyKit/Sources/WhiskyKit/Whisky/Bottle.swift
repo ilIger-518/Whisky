@@ -56,6 +56,17 @@ public final class Bottle: ObservableObject, Equatable, Hashable, Identifiable, 
               "Failed to load settings for bottle `\(metadataURL.path(percentEncoded: false))`: \(error)"
             )
             self.settings = BottleSettings()
+            do {
+                try FileManager.default.createDirectory(
+                    at: metadataURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try self.settings.encode(to: metadataURL)
+            } catch {
+                Logger.wineKit.error(
+                  "Failed to write default settings for bottle `\(metadataURL.path(percentEncoded: false))`: \(error)"
+                )
+            }
         }
 
         // Get rid of duplicates and pins that reference removed files

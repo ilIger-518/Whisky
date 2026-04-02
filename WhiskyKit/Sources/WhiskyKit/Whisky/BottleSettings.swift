@@ -242,31 +242,34 @@ public struct BottleSettings: Codable, Equatable {
 
     @discardableResult
     public static func decode(from metadataURL: URL) throws -> BottleSettings {
-        guard FileManager.default.fileExists(atPath: metadataURL.path(percentEncoded: false)) else {
+        guard !FileManager.default.fileExists(atPath: metadataURL.path(percentEncoded: false)) else {
             let decoder = PropertyListDecoder()
-            let settings = try decoder.decode(BottleSettings.self, from: Data(contentsOf: metadataURL))
-            try settings.encode(to: metadataURL)
+            let data = try Data(contentsOf: metadataURL)
+            var settings = try decoder.decode(BottleSettings.self, from: data)
+
+            guard settings.fileVersion == BottleSettings.defaultFileVersion else {
+                Logger.wineKit.warning("Invalid file version `\(settings.fileVersion)`")
+                settings = BottleSettings()
+                try settings.encode(to: metadataURL)
+                return settings
+            }
+
+            if settings.wineConfig.wineVersion != BottleWineConfig().wineVersion {
+                Logger.wineKit.warning("Bottle has a different wine version `\(settings.wineConfig.wineVersion)`")
+                settings.wineConfig.wineVersion = BottleWineConfig().wineVersion
+                try settings.encode(to: metadataURL)
+                return settings
+            }
+
             return settings
         }
 
-        let decoder = PropertyListDecoder()
-        let data = try Data(contentsOf: metadataURL)
-        var settings = try decoder.decode(BottleSettings.self, from: data)
-
-        guard settings.fileVersion == BottleSettings.defaultFileVersion else {
-            Logger.wineKit.warning("Invalid file version `\(settings.fileVersion)`")
-            settings = BottleSettings()
-            try settings.encode(to: metadataURL)
-            return settings
-        }
-
-        if settings.wineConfig.wineVersion != BottleWineConfig().wineVersion {
-            Logger.wineKit.warning("Bottle has a different wine version `\(settings.wineConfig.wineVersion)`")
-            settings.wineConfig.wineVersion = BottleWineConfig().wineVersion
-            try settings.encode(to: metadataURL)
-            return settings
-        }
-
+        let settings = BottleSettings()
+        try FileManager.default.createDirectory(
+            at: metadataURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try settings.encode(to: metadataURL)
         return settings
     }
 
