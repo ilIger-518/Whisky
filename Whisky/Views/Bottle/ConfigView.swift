@@ -17,6 +17,7 @@
 //
 
 import SwiftUI
+import SemanticVersion
 import WhiskyKit
 
 enum LoadingState {
@@ -29,9 +30,11 @@ enum LoadingState {
 struct ConfigView: View {
     @ObservedObject var bottle: Bottle
     @State private var buildVersion: Int = 0
+    @State private var runtimeWineVersion: String = ""
     @State private var retinaMode: Bool = false
     @State private var dpiConfig: Int = 96
     @State private var winVersionLoadingState: LoadingState = .loading
+    @State private var runtimeWineVersionLoadingState: LoadingState = .loading
     @State private var buildVersionLoadingState: LoadingState = .loading
     @State private var retinaModeLoadingState: LoadingState = .loading
     @State private var dpiConfigLoadingState: LoadingState = .loading
@@ -43,6 +46,16 @@ struct ConfigView: View {
     var body: some View {
         Form {
             Section("config.title.wine", isExpanded: $wineSectionExpanded) {
+                SettingItemView(title: "Runtime Wine Version", loadingState: runtimeWineVersionLoadingState) {
+                    Text(runtimeWineVersion)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                }
+                SettingItemView(title: "Bottle Wine Version", loadingState: .success) {
+                    Text(formattedVersion(bottle.settings.wineVersion))
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                }
                 SettingItemView(title: "config.winVersion", loadingState: winVersionLoadingState) {
                     Picker("config.winVersion", selection: $bottle.settings.windowsVersion) {
                         ForEach(WinVersion.allCases.reversed(), id: \.self) {
@@ -192,6 +205,7 @@ struct ConfigView: View {
         .navigationTitle("tab.config")
         .onAppear {
             winVersionLoadingState = .success
+            refreshRuntimeWineVersion()
 
             loadBuildName()
 
@@ -246,6 +260,22 @@ struct ConfigView: View {
                 }
             }
         }
+    }
+
+    func refreshRuntimeWineVersion() {
+        runtimeWineVersionLoadingState = .loading
+        Task(priority: .userInitiated) {
+            do {
+                runtimeWineVersion = try await Wine.wineVersion()
+                runtimeWineVersionLoadingState = .success
+            } catch {
+                runtimeWineVersionLoadingState = .failed
+            }
+        }
+    }
+
+    func formattedVersion(_ version: SemanticVersion) -> String {
+        "\(version.major).\(version.minor).\(version.patch)"
     }
 
     func loadBuildName() {
