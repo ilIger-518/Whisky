@@ -59,7 +59,17 @@ final class BottleVM: ObservableObject, @unchecked Sendable {
                 try await Wine.changeWinVersion(bottle: bottle, win: winVersion)
                 let wineVer = try await Wine.wineVersion()
                 await MainActor.run {
-                    bottle.settings.wineVersion = SemanticVersion(wineVer) ?? SemanticVersion(0, 0, 0)
+                    let parsed = SemanticVersion(wineVer)
+                        ?? {
+                            let parts = wineVer.split(separator: ".")
+                            guard parts.count == 2,
+                                  let major = Int(parts[0]),
+                                  let minor = Int(parts[1]) else {
+                                return nil
+                            }
+                            return SemanticVersion(major, minor, 0)
+                        }()
+                    bottle.settings.wineVersion = parsed ?? SemanticVersion(0, 0, 0)
                 }
                 // Add record
                 await MainActor.run {

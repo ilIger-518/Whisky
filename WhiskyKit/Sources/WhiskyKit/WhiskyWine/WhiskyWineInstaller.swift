@@ -158,7 +158,7 @@ public class WhiskyWineInstaller {
                 .split(whereSeparator: { !$0.isNumber && $0 != "." })
 
             for component in components {
-                if let version = SemanticVersion(String(component)) {
+                if let version = parseSemanticVersion(String(component)) {
                     return version
                 }
             }
@@ -167,6 +167,21 @@ public class WhiskyWineInstaller {
         }
 
         return nil
+    }
+
+    private static func parseSemanticVersion(_ raw: String) -> SemanticVersion? {
+        if let direct = SemanticVersion(raw) {
+            return direct
+        }
+
+        let parts = raw.split(separator: ".")
+        guard parts.count == 2,
+              let major = Int(parts[0]),
+              let minor = Int(parts[1]) else {
+            return nil
+        }
+
+        return SemanticVersion(major, minor, 0)
     }
 
     private static func writeWhiskyWineVersionPlist(version: SemanticVersion, to url: URL) {
